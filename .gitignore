@@ -123,7 +123,7 @@ venv.bak/
 # mypy
 .mypy_cache/
 .dmypy.json
-dmypy.json
+.json
 
 # Pyre type checker
 .pyre/
@@ -146,6 +146,7 @@ dmypy.json
 .mypy_cache
 
 # папки со статикой и медиа
+static/
 media/
 
 sent_emails/
