@@ -9,7 +9,9 @@ from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
 
-from blog.models import Post, Category
+
+from .forms import PostForm, CommentForm
+from blog.models import Post, Category, Comment
 
 User = get_user_model()
 
@@ -78,6 +80,21 @@ class PostDetailView(DetailView):
             pub_date__lte=datetime.now()
         )
      
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # context['Post_countdown'] = calculate_Post_countdown(
+        #     self.object.Post
+        # )
+        # Записываем в переменную form пустой объект формы.
+        context['form'] = CommentForm()
+        # Запрашиваем все поста для выбранного дня рождения.
+        context['comments'] = (
+            # Дополнительно подгружаем авторов комментариев,
+            # чтобы избежать множества запросов к БД.
+            self.object.comments.select_related('author')
+        )
+        return context
+
 
 class UserProfileListView(ListView):
     model = Post
@@ -100,6 +117,43 @@ class UserProfileListView(ListView):
         return context
     
     paginate_by = 10
+
+
+class PostCreateView(LoginRequiredMixin, CreateView):
+    model = Post
+    form_class = PostForm
+    template_name = 'blog/create.html'
+    success_url = reverse_lazy('blog:profile')
+    
+    def form_valid(self, form):
+        form.instance.author = self.request.user
+        return super().form_valid(form)
+
+
+class PostUpdateView(OnlyAuthorMixin, UpdateView):
+    model = Post
+    form_class = PostForm
+    template_name = 'blog/create.html'
+    success_url = reverse_lazy('blog:post_detail')
+
+
+class PostDeleteView(OnlyAuthorMixin, DeleteView):
+    model = Post
+    success_url = reverse_lazy('blog:index')
+
+
+class CommentUpdateView(OnlyAuthorMixin, UpdateView):
+    model = Comment
+    form_class = CommentForm
+    template_name = 'blog/comment.html'
+    success_url = reverse_lazy('blog:post_detail')
+
+
+class CommentDeleteView(OnlyAuthorMixin, DeleteView):
+    model = Comment
+    success_url = reverse_lazy('blog:index')
+
+
 # =========================================
 # from django.views.generic import (
 #     CreateView, DeleteView, DetailView, ListView, UpdateView
@@ -109,8 +163,8 @@ class UserProfileListView(ListView):
 # from django.contrib.auth.decorators import login_required
 # from django.shortcuts import get_object_or_404, redirect
 
-# from .forms import PostForm, CongratulationForm
-# from .models import Post, Congratulation
+# from .forms import PostForm, CommentForm
+# from .models import Post, Comment
 
 # from .utils import calculate_Post_countdown
 
@@ -131,27 +185,7 @@ class UserProfileListView(ListView):
 #     paginate_by = 10
 
 
-# class PostCreateView(LoginRequiredMixin, CreateView):
-#     model = Post
-#     form_class = PostForm
-
-#     def form_valid(self, form):
-#         # Присвоить полю author объект пользователя из запроса.
-#         form.instance.author = self.request.user
-#         # Продолжить валидацию, описанную в форме.
-#         return super().form_valid(form)
-
-
-# class PostUpdateView(OnlyAuthorMixin, UpdateView):
-#     model = Post
-#     form_class = PostForm
-
-
-# class PostDeleteView(OnlyAuthorMixin, DeleteView):
-#     model = Post
-#     success_url = reverse_lazy('Post:list')
-
-
+# 
 # class PostDetailView(DetailView):
 #     model = Post
 
@@ -161,30 +195,31 @@ class UserProfileListView(ListView):
 #             self.object.Post
 #         )
 #         # Записываем в переменную form пустой объект формы.
-#         context['form'] = CongratulationForm()
-#         # Запрашиваем все поздравления для выбранного дня рождения.
-#         context['congratulations'] = (
+#         context['form'] = CommentForm()
+#         # Запрашиваем все поста для выбранного дня рождения.
+#         context['comments'] = (
 #             # Дополнительно подгружаем авторов комментариев,
 #             # чтобы избежать множества запросов к БД.
-#             self.object.congratulations.select_related('author')
+#             self.object.comments.select_related('author')
 #         )
 #         return context
 
 
-# @login_required
-# def add_comment(request, pk):
-#     # Получаем объект дня рождения или выбрасываем 404 ошибку.
-#     Post = get_object_or_404(Post, pk=pk)
-#     # Функция должна обрабатывать только POST-запросы.
-#     form = CongratulationForm(request.POST)
-#     if form.is_valid():
-#         # Создаём объект поздравления, но не сохраняем его в БД.
-#         congratulation = form.save(commit=False)
-#         # В поле author передаём объект автора поздравления.
-#         congratulation.author = request.user
-#         # В поле Post передаём объект дня рождения.
-#         congratulation.Post = Post
-#         # Сохраняем объект в БД.
-#         congratulation.save()
-#     # Перенаправляем пользователя назад, на страницу дня рождения.
-#     return redirect('Post:detail', pk=pk)
+@login_required
+def add_comment(request, pk):
+    # Получаем объект поста или выбрасываем 404 ошибку.
+    post = get_object_or_404(Post, pk=pk)
+    # Функция должна обрабатывать только POST-запросы.
+    form = CommentForm(request.POST)
+    if form.is_valid():
+        # Создаём объект поста, но не сохраняем его в БД.
+        comment = form.save(commit=False)
+        # В поле author передаём объект автора поста.
+        comment.author = request.user
+        # В поле Post передаём объект дня рождения.
+        comment.post = post
+        # Сохраняем объект в БД.
+        comment.save()
+    # Перенаправляем пользователя назад, на страницу дня рождения.
+    return redirect('blog:post_detail', pk=pk)
+
