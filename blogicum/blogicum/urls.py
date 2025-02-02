@@ -21,9 +21,11 @@ urlpatterns = [
         ),
         name='registration',
     ),
+    
     # В конце добавляем к списку вызов функции static.
 ]
 
+handler403 = 'pages.views.csrf_failure'
 handler404 = 'pages.views.page_not_found'
 handler500 = 'pages.views.server_error'
 

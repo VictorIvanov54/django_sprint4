@@ -1,8 +1,11 @@
 from django import forms
+from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.core.exceptions import ValidationError
 
 from .models import Post, Comment
+
+User = get_user_model()
 
 
 class PostForm(forms.ModelForm):
@@ -23,6 +26,13 @@ class CommentForm(forms.ModelForm):
         fields = ('text',)
  
  
+class ProfileForm(forms.ModelForm):
+
+    class Meta:
+        model = User
+        fields = '__all__'
+        
+  
 #     def clean(self):
 #         super().clean()
 #         first_name = self.cleaned_data['first_name']
