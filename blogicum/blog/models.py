@@ -64,7 +64,6 @@ class Post(PublishedModel):
         default_related_name = 'posts'
 
     def get_absolute_url(self):
-        # С помощью функции reverse() возвращаем URL объекта.
         return reverse('blog:profile', kwargs={'username': self.username})
 
 

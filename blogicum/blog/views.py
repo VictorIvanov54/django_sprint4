@@ -92,74 +92,36 @@ class PostUpdateView(OnlyAuthorMixin, LoginRequiredMixin, UpdateView):
     
     def dispatch(self, request, *args, **kwargs):
         post = self.get_object()
-        if post.author != self.request.user.pk:
-            return reverse_lazy(
-                'blog:post_detail', args=(self.kwargs[self.pk_url_kwarg],)
+        if post.author != request.user:
+            return redirect(
+                'blog:post_detail', self.kwargs[self.pk_url_kwarg]
             )
         return super().dispatch(request, *args, **kwargs)
     
-    # instance = get_object_or_404(Post, pk=pk)
-    # # В форму передаём только объект модели;
-    # # передавать в форму параметры запроса не нужно.
-    # form = PostForm(instance=instance)
-    # context = {'form': form}
-    # return redirect('birthday:list')
-    # success_url = reverse_lazy('blog:post_detail')
-    # # redirect('blog:post_detail', pk=pk)
-    # def add_comment(request, pk):
-    #     post = get_object_or_404(Post, pk=pk)
-    #     # Функция должна обрабатывать только POST-запросы.
-    #     form = PostForm(request.POST)
-
-    # def get_object_or_404(self, pk):
-    #     form = PostForm(request.POST)
-    #     return Post.objects.select_related(
-    #         'category', 'location').filter(pk=self.kwargs['pk'])
-
-
-class PostDeleteView(OnlyAuthorMixin, DeleteView):
+    
+class PostDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
     model = Post
-    # form_class = PostForm
+    form_class = PostForm
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
-    # context_object_name = 'form.instance'
     success_url = reverse_lazy('blog:index')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        instance = get_object_or_404(Post, pk=self.kwargs[self.pk_url_kwarg])
+        context['form'] = PostForm(instance=instance)
+        return context
 
     # def get_queryset(self):
     #     queryset = super().get_queryset()
     #     return queryset.filter(author=self.request.user)
 
-    # def get_form(self, form_class):
-    #     if form_class is None:
-    #         form_class = self.get_form_class()
-    #     return form_class(**self.get_form_kwargs())
-
-    # def get_context_data(self, **kwargs):
-    #     context = super().get_context_data(**kwargs)
-    #     context['form'] = self.get_form(PostForm).filter(pk=self.post.id)
-    #     return context
-    
-    # # def get_object_or_404(self, pk):
-    #     # return Post.objects.select_related('category', 'location').filter(
-        #     pk=self.kwargs['pk']
-        # )
-        # instance = get_object_or_404(Post, pk=pk)
-    # В форму передаём только объект модели;
-    # передавать в форму параметры запроса не нужно.
-        # context['form'] = PostForm(instance=instance)
-        # return redirect('birthday:list')
-    # def get_context_data(self, **kwargs):
-    #     context = super().get_context_data(**kwargs)
-        
-    #     context['form.instance'] = PostForm
-    #     return context
-
-
+   
 class CategoryPostsListView(ListView):
     model = Post
     template_name = 'blog/category.html'
     slug_url_kwarg = 'category_slug'
-    # slug_field = 'slug'
+    paginate_by = 10
     allow_empty = False
     
     def get_queryset(self):
@@ -179,9 +141,7 @@ class CategoryPostsListView(ListView):
         )
         return context
     
-    paginate_by = 10
-
-
+   
 class UserProfileListView(ListView):
     model = Post
     template_name = 'blog/profile.html'
@@ -189,9 +149,9 @@ class UserProfileListView(ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        user = get_object_or_404(User, username=self.kwargs[self.slug_url_kwarg])
-        if user.username == self.request.user:
-            return self.model.objects.select_related('category', 'location').filter(
+        if self.kwargs[self.slug_url_kwarg] == self.request.user.username:
+            return self.model.objects.select_related(
+                'category', 'location').filter(
                 author__username=self.request.user,
             )
         else:
