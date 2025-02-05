@@ -3,8 +3,10 @@ from datetime import datetime
 from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse, reverse_lazy
+from django.core.mail import send_mail
+from django.db.models import Count
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse_lazy
 from django.views.generic import (
     CreateView, DeleteView, DetailView, ListView, UpdateView
 )
@@ -17,6 +19,7 @@ User = get_user_model()
 
 
 class OnlyAuthorMixin(UserPassesTestMixin):
+    """Миксин проверки прав доступа пользователя."""
 
     def test_func(self):
         object = self.get_object()
@@ -24,20 +27,25 @@ class OnlyAuthorMixin(UserPassesTestMixin):
 
 
 class PostListView(ListView):
+    """Отображение списка постов (главная страница)."""
+
     model = Post
     template_name = 'blog/index.html'
-    
+    ordering = '-pub_date'
+    paginate_by = 10
+
     def get_queryset(self):
-        return self.model.objects.select_related('category', 'location').filter(
+        return super().get_queryset().filter(
             is_published=True,
             category__is_published=True,
             pub_date__lte=datetime.now()
-        )
-    # ordering = '-pub_date'
-    paginate_by = 10
+        ).select_related('category', 'location', 'author').annotate(
+            comment_count=Count('comments'))
 
 
 class PostDetailView(DetailView):
+    """Детальное отображение отдельного поста."""
+
     model = Post
     template_name = 'blog/detail.html'
     pk_url_kwarg = 'post_id'
@@ -47,15 +55,16 @@ class PostDetailView(DetailView):
         post = get_object_or_404(self.model, pk=self.kwargs[self.pk_url_kwarg])
         if post.author == self.request.user:
             return post
-        return get_object_or_404(        
-            self.model.objects.select_related('category', 'location').filter(
-                pk=self.kwargs[self.pk_url_kwarg], 
-                is_published=True,
-                category__is_published=True,
-                pub_date__lte=datetime.now()
+        return get_object_or_404(
+            self.model.objects.select_related(
+                'category', 'location', 'author').filter(
+                    pk=self.kwargs[self.pk_url_kwarg],
+                    is_published=True,
+                    category__is_published=True,
+                    pub_date__lte=datetime.now()
             )
         )
-     
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['form'] = CommentForm()
@@ -66,30 +75,36 @@ class PostDetailView(DetailView):
 
 
 class PostCreateView(LoginRequiredMixin, CreateView):
+    """Отображение создания нового поста."""
+
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
     success_url = reverse_lazy('blog:profile')
-        
+
     def form_valid(self, form):
         form.instance.author = self.request.user
         return super().form_valid(form)
-    
+
     def get_success_url(self):
-        return reverse_lazy('blog:profile', kwargs={'username': self.request.user})
+        return reverse_lazy(
+            'blog:profile', kwargs={'username': self.request.user}
+        )
 
 
 class PostUpdateView(OnlyAuthorMixin, LoginRequiredMixin, UpdateView):
+    """Отображение изменения отдельного поста."""
+
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
-   
+
     def get_success_url(self):
         return reverse_lazy(
             'blog:post_detail', args=(self.kwargs[self.pk_url_kwarg],)
         )
-    
+
     def dispatch(self, request, *args, **kwargs):
         post = self.get_object()
         if post.author != request.user:
@@ -97,9 +112,11 @@ class PostUpdateView(OnlyAuthorMixin, LoginRequiredMixin, UpdateView):
                 'blog:post_detail', self.kwargs[self.pk_url_kwarg]
             )
         return super().dispatch(request, *args, **kwargs)
-    
-    
+
+
 class PostDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
+    """Отображение удаления отдельного поста."""
+
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
@@ -112,25 +129,24 @@ class PostDeleteView(OnlyAuthorMixin, LoginRequiredMixin, DeleteView):
         context['form'] = PostForm(instance=instance)
         return context
 
-    # def get_queryset(self):
-    #     queryset = super().get_queryset()
-    #     return queryset.filter(author=self.request.user)
 
-   
 class CategoryPostsListView(ListView):
+    """Отображение постов отдельной категории."""
+
     model = Post
     template_name = 'blog/category.html'
     slug_url_kwarg = 'category_slug'
     paginate_by = 10
-    allow_empty = False
-    
+    ordering = '-pub_date'
+
     def get_queryset(self):
-        return self.model.objects.select_related('category', 'location').filter(
-            is_published=True,
+        return super().get_queryset().filter(
             category__slug=self.kwargs[self.slug_url_kwarg],
+            is_published=True,
             category__is_published=True,
             pub_date__lte=datetime.now()
-        )
+        ).select_related('category', 'location', 'author').annotate(
+            comment_count=Count('comments'))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -140,27 +156,31 @@ class CategoryPostsListView(ListView):
             is_published=True
         )
         return context
-    
-   
+
+
 class UserProfileListView(ListView):
+    """Отображение страницы конкретного пользователя со списком его постов."""
+
     model = Post
     template_name = 'blog/profile.html'
     slug_url_kwarg = 'username'
     paginate_by = 10
+    ordering = '-pub_date'
 
     def get_queryset(self):
         if self.kwargs[self.slug_url_kwarg] == self.request.user.username:
-            return self.model.objects.select_related(
-                'category', 'location').filter(
+            return super().get_queryset().filter(
                 author__username=self.request.user,
-            )
+            ).select_related('category', 'location', 'author').annotate(
+                comment_count=Count('comments'))
         else:
-            return self.model.objects.select_related('category', 'location').filter(
+            return super().get_queryset().filter(
                 is_published=True,
                 author__username=self.kwargs[self.slug_url_kwarg],
                 category__is_published=True,
                 pub_date__lte=datetime.now()
-            )
+            ).select_related('category', 'location', 'author').annotate(
+                comment_count=Count('comments'))
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -169,35 +189,47 @@ class UserProfileListView(ListView):
             username=self.kwargs[self.slug_url_kwarg],
         )
         return context
-    
-   
+
+
 class UserProfileUpdateView(LoginRequiredMixin, UpdateView):
+    """Отображение страницы изменения профиля конкретного пользователя."""
+
     model = User
     form_class = ProfileForm
     template_name = 'blog/user.html'
     slug_url_kwarg = 'username'
-    
+
     def get_object(self):
         return self.request.user
-    
+
     def get_success_url(self):
+        """Отправляем письмо, если пользователь изменил профиль."""
+        send_mail(
+            subject='The user changed the profile',
+            message=f'{self.request.user} изменил профиль',
+            from_email='User@post.not',
+            recipient_list=['admin@post.not'],
+            fail_silently=True,
+        )
         return reverse_lazy(
             'blog:profile', kwargs={'username': self.object.username}
         )
-    
+
 
 class CommentUpdateView(UserPassesTestMixin, UpdateView):
+    """Отображение страницы изменения отдельного комментария."""
+
     model = Comment
     form_class = CommentForm
     template_name = 'blog/comment.html'
     pk_url_kwarg = 'comment_id'
-       
+
     def test_func(self):
         comment = get_object_or_404(
             self.model, pk=self.kwargs[self.pk_url_kwarg]
         )
         return comment.author == self.request.user
-    
+
     def get_success_url(self):
         return reverse_lazy(
             'blog:post_detail', args=(self.kwargs['post_id'],)
@@ -205,6 +237,8 @@ class CommentUpdateView(UserPassesTestMixin, UpdateView):
 
 
 class CommentDeleteView(UserPassesTestMixin, DeleteView):
+    """Отображение страницы удаления отдельного комментария."""
+
     model = Comment
     form_class = CommentForm
     template_name = 'blog/comment.html'
@@ -216,28 +250,16 @@ class CommentDeleteView(UserPassesTestMixin, DeleteView):
             self.model, pk=self.kwargs[self.pk_url_kwarg]
         )
         return comment.author == self.request.user
-    
-    # def get_success_url(self):
-    #     return reverse_lazy(
-    #         'blog:post_detail', args=(self.kwargs['post_id'],)
-    #     )
-    
+
 
 @login_required
 def add_comment(request, post_id):
-    # Получаем объект поста или выбрасываем 404 ошибку.
+    """Добавление комментария к публикации"""
     post = get_object_or_404(Post, pk=post_id)
-    # Функция должна обрабатывать только POST-запросы.
     form = CommentForm(request.POST)
     if form.is_valid():
-        # Создаём объект поста, но не сохраняем его в БД.
         comment = form.save(commit=False)
-        # В поле author передаём объект автора поста.
         comment.author = request.user
-        # В поле Post передаём объект дня рождения.
         comment.post = post
-        # Сохраняем объект в БД.
         comment.save()
-    # Перенаправляем пользователя назад, на страницу дня рождения.
     return redirect('blog:post_detail', post_id)
-

@@ -8,6 +8,8 @@ User = get_user_model()
 
 
 class PublishedModel(models.Model):
+    """Абстрактная модель-миксин. Статус опубликования, время добавления."""
+
     is_published = models.BooleanField(
         default=True,
         verbose_name='Опубликовано',
@@ -26,6 +28,8 @@ class PublishedModel(models.Model):
 
 
 class Post(PublishedModel):
+    """Модель публикации"""
+
     title = models.CharField(
         max_length=LINE_LENGTH,
         verbose_name='Заголовок'
@@ -68,6 +72,8 @@ class Post(PublishedModel):
 
 
 class Category(PublishedModel):
+    """Модель категории публикации"""
+
     title = models.CharField(
         max_length=LINE_LENGTH,
         verbose_name='Заголовок'
@@ -89,6 +95,8 @@ class Category(PublishedModel):
 
 
 class Location(PublishedModel):
+    """Модель описания местоположения публикации"""
+
     name = models.CharField(
         max_length=LINE_LENGTH,
         verbose_name='Название места'
@@ -104,6 +112,8 @@ class Location(PublishedModel):
 
 
 class Comment(models.Model):
+    """Модель комментария публикации"""
+
     text = models.TextField('Текст комментария')
     post = models.ForeignKey(
         Post,

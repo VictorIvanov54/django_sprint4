@@ -4,7 +4,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-#s$fiswjk#u6m_q64enb9#@h9kzxye_w#wuux71zt%+qw0n5aw'
 
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = [
     'localhost',
@@ -109,4 +109,4 @@ LOGIN_REDIRECT_URL = 'blog:index'
 
 LOGIN_URL = 'login'
 
-INTERNAL_IPS = ['127.0.0.1',]
+INTERNAL_IPS = ['127.0.0.1', ]
