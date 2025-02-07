@@ -1,8 +1,18 @@
 from django.contrib.auth import get_user_model
 from django.db import models
+from django.db.models import Count
 from django.urls import reverse
 
 from blog.constants import LINE_LENGTH
+
+
+class CustomManager(models.Manager):
+    def select_annotate(self):
+        return self.select_related(
+            'category', 'location', 'author').annotate(
+            comment_count=Count('comments')
+        ).order_by('-pub_date')
+
 
 User = get_user_model()
 
@@ -60,6 +70,8 @@ class Post(PublishedModel):
         verbose_name='Категория'
     )
     image = models.ImageField('Фото', upload_to='post_images', blank=True)
+    objects = models.Manager()
+    filt = CustomManager()
 
     class Meta:
         verbose_name = 'публикация'
@@ -111,7 +123,7 @@ class Location(PublishedModel):
         return self.name
 
 
-class Comment(models.Model):
+class Comment(PublishedModel):
     """Модель комментария публикации"""
 
     text = models.TextField('Текст комментария')
@@ -120,8 +132,11 @@ class Comment(models.Model):
         on_delete=models.CASCADE,
         related_name='comments',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    author = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name='Автор комментария'
+    )
 
     class Meta:
         ordering = ('created_at',)
